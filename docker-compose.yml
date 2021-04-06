@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  jobkrake:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 9000:9000
+    image:
+      ghenrich/jobkrake
+    restart: unless-stopped
