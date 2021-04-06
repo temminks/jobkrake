@@ -1,6 +1,6 @@
 import datetime
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Union, List, Optional
 
 
@@ -10,13 +10,13 @@ class Job:
     company: str
     career_url: str
     url: str
-    location: Union[str, List] = ''
-    date: Union[str, datetime.date] = datetime.date.today()
-    keywords: Union[str, List] = ''
+    location: Union[str, List[str]] = field(default_factory=list)
+    date: Union[str, datetime.date] = field(default=datetime.date.today(), compare=False)
+    keywords: Union[str, List[str]] = field(default_factory=list)
     department: str = ''
     schedule: str = ''
     seniority: Union[str, List[str]] = ''
-    type_: Optional[str] = ''
+    type_: str = ''
 
     def __post_init__(self):
         if self.seniority == '':

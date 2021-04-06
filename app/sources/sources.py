@@ -1031,10 +1031,8 @@ async def eins_und_eins() -> Dict[str, List[Job]]:
                 for link in links:
                     async with session.get(link) as sub_site:
                         soup = BeautifulSoup(await sub_site.text(), 'html.parser')
-                        offers: List[BeautifulSoup] = soup.find('div', 'main-content').find('ul',
-                                                                                            'joboffer-result-list').findAll(
-                            'li',
-                            'clearfix')
+                        offers: List[BeautifulSoup] = soup.find('div', 'main-content') \
+                            .find('ul', 'joboffer-result-list').findAll('li', 'clearfix')
                         jobs += [Job(**{
                             'url': career_url + job.a['href'],
                             'title': job.a.text.strip(),
@@ -1057,7 +1055,7 @@ async def pace_car() -> Dict[str, List[Job]]:
             soup = BeautifulSoup(await response.text(), 'html.parser')
             jobs: List[BeautifulSoup] = soup.find('div', 'jobs-table').tbody.findAll('tr')
             return {'pace.car': [Job(**{
-                'url': 'https://www.pace.car' + job.find('tr', class_='job-link').a['href'],
+                'url': 'https://www.pace.car' + job.find('td', class_='job-link').a['href'],
                 'title': job.find('tr', class_='job-title').text.strip(),
                 'location': job.find('tr', class_='job-location').text.strip(),
                 'schedule': job.find('tr', class_='job-hours').text.strip(),
