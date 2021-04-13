@@ -10,7 +10,7 @@ from sources.jobs import Job
 app = Quart(__name__)
 
 source_names = [name for name, _ in inspect.getmembers(s, predicate=inspect.iscoroutinefunction) if
-                name not in ['parse_rexx', 'parse_workday']]
+                name not in ['parse_rexx', 'parse_workday', 'parse_personio']]
 
 
 @app.route('/<company>')

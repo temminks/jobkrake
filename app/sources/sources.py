@@ -3,6 +3,7 @@ import re
 import time
 import traceback
 from dataclasses import asdict
+from datetime import datetime
 from typing import Any
 from typing import Callable, Tuple, Dict, List, Union
 
@@ -78,7 +79,7 @@ async def parse_rexx(url: str, payload: str, career_url: str, company: str) -> L
             jobs = job_table.findAll('tr', class_=re.compile('alternative_'))
 
     return [Job(**{
-        "url": job.find('a')['href'],
+        "url": job.find('a')['href'][:job.find('a')['href'].find('?sid')],
         "title": job.find('a').text.strip(),
         "location": [loc.strip() for loc in job.find('td', class_='real_table_col2').text.split(',')],
         "keywords": [key.strip() for key in job.find('td', class_='real_table_col3').text.split(',')],
@@ -1077,6 +1078,7 @@ async def log_me_in() -> Dict[str, List[Job]]:
 
 @fetch_jobs
 async def dm() -> Dict[str, List[Job]]:
+    date_format = '%Y-%m-%dT%H:%M:%SZ'
     async with aiohttp.ClientSession() as session:
         session.headers.update(
             {'api-key': '8DE66DF51831A58E3317536F02E737BB', 'Content-Type': 'application/json;charset=UTF-8'})
@@ -1084,12 +1086,11 @@ async def dm() -> Dict[str, List[Job]]:
         url = 'https://csbep.search.windows.net/indexes/dm-prod/docs/search?api-version=2019-05-06'
         payload = "{\"count\":true,\"facets\":[],\"filter\":\"(search.ismatch('Karlsruhe') or search.ismatch('Ettlingen')) and jobType ne 'Ausbildung' and not search.ismatch('Werkstudent', 'title') and jobType ne 'Praktikum'\",\"search\":\"*\",\"skip\":0,\"top\":9999}"
         async with session.post(url, data=payload) as response:
-            jobs = json.loads(await response.text())
             jobs = json.loads(await response.text())['value']
 
         return {'dm': [Job(**{
             'title': job['title'],
-            'date': job['datePosted'],
+            'date': datetime.strptime(job['datePosted'], date_format),
             'url': job['link'],
             'company': f"dm ({job['brand']})",
             'schedule': job['workHours'],
@@ -1101,3 +1102,6 @@ async def dm() -> Dict[str, List[Job]]:
 
 # Backlog
 # * https://www.kenbun.de/karriere/
+# * https://about.chrono24.com/de/jobs/
+# * https://jobs.kochcareers.com/
+# * https://www.knuddels.at/jobs
