@@ -4,7 +4,7 @@ RUN apt-get update && apt-get -y upgrade
 
 RUN pip install --upgrade pip
 
-RUN pip install quart aiohttp requests bs4
+RUN pip install quart aiohttp requests bs4 PyYAML
 
 COPY app /app/
 

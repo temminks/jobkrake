@@ -4,11 +4,11 @@ import time
 import traceback
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any
-from typing import Callable, Tuple, Dict, List, Union
+from typing import Callable, Tuple, Dict, List, Union, Any
 
 import aiohttp as aiohttp
 import requests
+import yaml
 from bs4 import BeautifulSoup
 
 from sources.jobs import Job
@@ -93,7 +93,8 @@ async def parse_workday(url: str, payload: str, career_url: str, company: str) -
         session.headers.update(headers)
         session.headers.update({'Content-Type': 'application/x-www-form-urlencoded', })
         async with session.post(url + '1/replaceFacet/318c8bb6f553100021d223d9780d30be', data=payload) as response:
-            jobs = json.loads(await response.text())['body']['children'][0]['children'][0]['listItems']
+            children: Dict[str, Any] = json.loads(await response.text())['body']['children'][0]['children'][0]
+            jobs = children.get('listItems', [])
             return [Job(**{
                 'title': job['title']['instances'][0]['text'],
                 'url': url[:url.find('.com') + 4] + job['title']['commandLink'],
@@ -309,11 +310,11 @@ async def netplans() -> Dict[str, List[Job]]:
     async with aiohttp.ClientSession() as session:
         session.headers.update(headers)
         career_url = "https://www.netplans.de/karriere"
-        url = "https://www.netplans.de/karriere"
+        url = "https://www.netplans.de/karriere/professionals"
 
         async with session.get(url) as response:
             soup = BeautifulSoup(await response.text(), 'html.parser')
-            jobboxes = soup.find('div', {'id': 'jobboxes'}).find('div', class_='newsflash')
+            jobboxes = soup.find('div', class_='newsflash')
             jobs = jobboxes.findAll('div', 'job-info')
             jobs = [job for job in jobs if "Ettlingen" in job.text]
             return {"netplans": [Job(**{
@@ -552,8 +553,8 @@ async def bruker() -> Dict[str, List[Job]]:
                                 "ettlingen" in row.text.lower() or "remote" in row.text.lower()]
                     jobs += [Job(**{
                         "url": job.find('div', class_='title').find('a')['href'],
-                        "title": job.find('div', class_='title').find('a').find('span', class_=None).text.strip(),
-                        "location": [l.strip() for l in
+                        "title": job.find('div', class_='title').find('a').find('h2', class_=None).text.strip(),
+                        "location": [location.strip() for location in
                                      job.select('div.header.left')[0].find('span', class_=None).text.strip().split(
                                          "|")],
                         "date": job.select('div.header.right')[0].find('span', class_=None)['title'],
@@ -678,23 +679,26 @@ async def dachser() -> Dict[str, List[Job]]:
 
 
 @fetch_jobs
-async def daimer_tss() -> Dict[str, List[Job]]:
+async def daimler_tss() -> Dict[str, List[Job]]:
     session = requests.session()
     session.headers.update(headers)
-    career_url = "https://www.daimler-tss.com/de/karriere/jobs/#berufserfahrene_absolventen"
-    url = "https://www.daimler-tss.com/de/karriere/jobs/#berufserfahrene_absolventen"
+    career_url = "https://www.daimler-tss.com/de/jobs/"
+    url = "https://www.daimler-tss.com/de/jobs/"
     response = session.get(url, verify='certificates/daimler-tss-de-zertifikatskette.pem')
     if response:
-        soup = BeautifulSoup(response.text, 'html.parser')
-        job_table = soup.find('div', {'id': 'berufserfahrene_absolventen'}).table.tbody
-        jobs: List[BeautifulSoup] = job_table.findAll('tr')
+        soup: BeautifulSoup = BeautifulSoup(response.text.encode(response.encoding).decode('utf-8'), 'html.parser')
+        content: str = soup.find('script', {'id': 'app-content'}).string.strip()
+        trimmed = content[content.find('{'):]
+        trimmed = trimmed.replace('\t', '').replace('\n', '')
+        jobs = [job['jobs'] for job in yaml.safe_load(trimmed)['modules'] if job['type'] == 'job_offers'][0]
+        karlsruhe = [job for job in jobs if 'Karlsruhe' in job['location']]
         return {'daimler_tss': [Job(**{
-            'url': 'https://www.daimler-tss.com/de/karriere/jobs/' + job.find('a')['href'],
-            'title': job.find('a').text.strip(),
-            'location': [location.strip() for location in job.findAll('td')[1].text.split(',')],
+            'url': 'https://www.daimler-tss.com/de/jobs/' + job['link']['href']['url'],
+            'title': job['title'],
+            'location': job['location'],
             'career_url': career_url,
             'company': 'Daimler TSS GmbH',
-        }) for job in jobs]}
+        }) for job in karlsruhe]}
 
 
 @fetch_jobs
@@ -721,11 +725,11 @@ async def stp() -> Dict[str, List[Job]]:
 async def cynora() -> Dict[str, List[Job]]:
     async with aiohttp.ClientSession() as session:
         session.headers.update(headers)
-        career_url = "https://cynora.com/de/karriere/aktuelle-stellenangebote/professionals/"
-        url = "https://cynora.com/de/karriere/aktuelle-stellenangebote/professionals/"
+        career_url = "https://cynora.com/de/karriere/stellenangebote/professionals/"
+        url = "https://cynora.com/de/karriere/stellenangebote/professionals/"
         async with session.get(url) as response:
             soup = BeautifulSoup(await response.text(), 'html.parser')
-            jobs: List[BeautifulSoup] = soup.findAll('div', class_='rowJobs')
+            jobs: List[BeautifulSoup] = soup.findAll('div', class_='jobs')
             return {'cynora': [Job(**{
                 'url': job.find('a')['href'],
                 'title': job.find('a').text[job.find('a').text.find('–') + 1:].strip(),
@@ -799,8 +803,7 @@ async def nesto() -> Dict[str, List[Job]]:
         url = "https://nesto-software.de/jobs/"
         async with session.get(url) as response:
             soup = BeautifulSoup(await response.text(), 'html.parser')
-            job_section = soup.find('div', {'id': 'career'}).find('div', class_='feature_list').find('ul')
-            jobs = [li.find('a') for li in job_section.findAll('li')]
+            jobs = soup.find('div', {'id': 'career'}).findAll('div', class_='mcb-wrap-inner')[-1].findAll('a')
             return {'nesto': [Job(**{
                 'url': job['href'],
                 'title': job.text,
@@ -1057,9 +1060,9 @@ async def pace_car() -> Dict[str, List[Job]]:
             jobs: List[BeautifulSoup] = soup.find('div', 'jobs-table').tbody.findAll('tr')
             return {'pace.car': [Job(**{
                 'url': 'https://www.pace.car' + job.find('td', class_='job-link').a['href'],
-                'title': job.find('tr', class_='job-title').text.strip(),
-                'location': job.find('tr', class_='job-location').text.strip(),
-                'schedule': job.find('tr', class_='job-hours').text.strip(),
+                'title': job.find('td', class_='job-title').text.strip(),
+                'location': job.find('td', class_='job-location').text.strip(),
+                'schedule': job.find('td', class_='job-hours').text.strip(),
                 'career_url': career_url,
                 'company': 'PACE Telematics GmbH',
             }) for job in jobs]}
@@ -1100,8 +1103,49 @@ async def dm() -> Dict[str, List[Job]]:
             'type_': job['jobType'],
         }) for job in jobs]}
 
+
+@fetch_jobs
+async def kenbun() -> Dict[str, List[Job]]:
+    async with aiohttp.ClientSession() as session:
+        career_url = "https://www.kenbun.de/karriere/"
+        url = "https://www.kenbun.de/karriere/"
+        async with session.get(url) as response:
+            soup = BeautifulSoup(await response.text(), 'html.parser')
+            jobs: List[BeautifulSoup] = soup.find('div', id='stellenanzeigen').findAll('div', 'et_pb_row')[-1].findAll(
+                'div', 'et_pb_toggle_close')
+            return {'kenbun': [Job(**{
+                'url': job.find('div', 'et_pb_toggle_content').findAll('p')[-1].findAll('a')[-1].get('href'),
+                'title': job.h5.text[:job.h5.text.rfind('-')].strip(),
+                'location': job.h5.text[job.h5.text.rfind('-') + 1:].strip(),
+                'career_url': career_url,
+                'company': 'KENBUN IT AG',
+            }) for job in jobs]}
+
+@fetch_jobs
+async def knuddels() -> Dict[str, List[Job]]:
+    async with aiohttp.ClientSession() as session:
+        stub = 'https://www.knuddels.de'
+        career_url = "https://www.knuddels.de/jobs"
+        url = "https://www.knuddels.de/jobs"
+        async with session.get(url) as response:
+            soup = BeautifulSoup(await response.text(), 'html.parser')
+            jobs: List[BeautifulSoup] = []
+
+            # find departments and get as soup
+            departments = [a.get('href') for a in soup.find('div', 'departmentnavi').findAll('a', 'departmentnavi-element')]
+            for department in departments:
+                async with session.get(stub + department) as dept_response:
+                    dept_soup = BeautifulSoup(await dept_response.text(), 'html.parser')
+                    jobs += dept_soup.find('table', id='joblist').findAll('tr', 'job')[:-1]
+
+            return {'knuddels': [Job(**{
+                'url': stub + job.find('a').get('href'),
+                'title': job.find('a').next.strip(),
+                'location': 'Karlsruhe',
+                'career_url': career_url,
+                'company': 'Knuddels GmbH & Co. KG',
+            }) for job in jobs]}
+
 # Backlog
-# * https://www.kenbun.de/karriere/
 # * https://about.chrono24.com/de/jobs/
 # * https://jobs.kochcareers.com/
-# * https://www.knuddels.at/jobs

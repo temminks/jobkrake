@@ -1,7 +1,7 @@
 import datetime
 import re
 from dataclasses import dataclass, field
-from typing import Union, List, Optional
+from typing import Union, List
 
 
 @dataclass
